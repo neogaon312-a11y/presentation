@@ -75,7 +75,7 @@ with st.sidebar:
     else:
         st.info("아직 등록된 과목이 없습니다. 아래에서 추가하세요!")
 
-    # 과목 삭제 기능
+    # 과목 삭제 기능 (이제 해당 과목 수행평가들도 같이 삭제)
     if st.session_state.subject_colors:
         st.markdown("---")
         st.subheader("과목 삭제")
@@ -85,10 +85,20 @@ with st.sidebar:
         )
         if subj_to_delete != "(선택 안 함)":
             if st.button("선택한 과목 삭제"):
-                # 색상 딕셔너리에서 삭제
+                # 색상 딕셔너리에서 과목 삭제
                 st.session_state.subject_colors.pop(subj_to_delete, None)
-                # 이미 등록된 수행평가들은 과목 이름은 유지 (지우면 보기 불편해지니 그대로 둠)
-                st.success(f"과목 '{subj_to_delete}'를 색상 목록에서 삭제했습니다.")
+                # 해당 과목의 수행평가들도 모두 삭제
+                st.session_state.assignments = [
+                    a for a in st.session_state.assignments
+                    if a["subject"] != subj_to_delete
+                ]
+                # 만약 선택되어 있던 수행평가가 이 과목이면 선택 해제
+                sel = get_assignment_by_id(st.session_state.selected_assignment_id)
+                if sel is not None and sel["subject"] == subj_to_delete:
+                    st.session_state.selected_assignment_id = None
+                    st.session_state.edit_mode = False
+
+                st.success(f"과목 '{subj_to_delete}'와(과) 관련된 수행평가를 모두 삭제했습니다.")
 
     st.markdown("---")
     with st.form("add_subject_form"):
@@ -212,8 +222,10 @@ for week in month_weeks:
                     unsafe_allow_html=True,
                 )
             else:
-                st.markdown(f"<div style='font-weight:bold;font-size:0.85rem;'>{day.day}</div>",
-                            unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='font-weight:bold;font-size:0.85rem;'>{day.day}</div>",
+                    unsafe_allow_html=True,
+                )
 
                 day_assignments = get_assignments_by_date(day)
                 if not day_assignments:
@@ -222,7 +234,7 @@ for week in month_weeks:
                 for a in day_assignments:
                     color = st.session_state.subject_colors.get(a["subject"], "#666666")
 
-                    # 박스 크기 줄이기 (padding, margin, font-size 줄임)
+                    # 박스 크기 줄이기
                     st.markdown(
                         f"""
                         <div style="
@@ -247,7 +259,7 @@ for week in month_weeks:
 
 st.markdown("---")
 
-# ---------- 선택된 수행평가 상세 + 수정 ----------
+# ---------- 선택된 수행평가 상세 + 수정/삭제 ----------
 st.markdown("### 📌 선택된 수행평가")
 
 selected = (
@@ -259,7 +271,7 @@ selected = (
 if selected is None:
     st.info("캘린더에서 보고 싶은 수행평가의 '열기' 버튼을 눌러 선택해 주세요.")
 else:
-    # 보기 모드 / 수정 모드 나누기
+    # 보기 모드 / 수정 모드
     if not st.session_state.edit_mode:
         top_left, top_right = st.columns([3, 1])
         with top_left:
@@ -298,7 +310,7 @@ else:
                 st.caption("📷 업로드된 사진이 없습니다.")
 
         with top_right:
-            st.write("")  # 여백
+            st.write("")
             st.write("")
             if st.button("수정", key="edit_btn"):
                 st.session_state.edit_mode = True
@@ -306,7 +318,6 @@ else:
     else:
         st.markdown("#### ✏️ 수행평가 수정")
 
-        # 수정 폼
         with st.form("edit_assignment_form"):
             left, right = st.columns(2)
 
@@ -350,11 +361,13 @@ else:
                 key="edit_images",
             )
 
-            col_save, col_cancel = st.columns(2)
+            col_save, col_cancel, col_delete = st.columns(3)
             with col_save:
                 save_clicked = st.form_submit_button("저장")
             with col_cancel:
                 cancel_clicked = st.form_submit_button("취소")
+            with col_delete:
+                delete_clicked = st.form_submit_button("삭제")
 
             if save_clicked:
                 selected["title"] = new_title.strip()
@@ -368,10 +381,19 @@ else:
                 st.success("수행평가 정보를 수정했습니다.")
 
             elif cancel_clicked:
-                # 선택 해제 + 수정 모드 해제 → 아래 박스 바로 사라짐
                 st.session_state.edit_mode = False
                 st.session_state.selected_assignment_id = None
                 st.info("수정을 취소했습니다. 선택도 해제되었습니다.")
+
+            elif delete_clicked:
+                # 이 수행평가를 assignments 리스트에서 제거
+                st.session_state.assignments = [
+                    a for a in st.session_state.assignments
+                    if a["id"] != selected["id"]
+                ]
+                st.session_state.edit_mode = False
+                st.session_state.selected_assignment_id = None
+                st.success("수행평가를 삭제했습니다.")
 
 st.markdown("---")
 
