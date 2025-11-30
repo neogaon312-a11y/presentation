@@ -189,7 +189,7 @@ with st.form("add_assignment_form"):
 st.markdown("---")
 
 # ---------- 월별 캘린더 ----------
-st.markdown("### 🗓 월별 캘린더 (박스 '열기' → 상세 보기)")
+st.markdown("### 🗓 월별 캘린더")
 
 year = st.session_state["current_month"].year
 month = st.session_state["current_month"].month
