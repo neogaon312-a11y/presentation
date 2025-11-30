@@ -4,6 +4,13 @@ import calendar
 
 st.set_page_config(page_title="수행평가 캘린더", layout="wide")
 
+# ---------- 공통: 강제 새로고침 함수 ----------
+def force_rerun():
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
+
 # ---------- 세션 상태 초기화 ----------
 if "subject_colors" not in st.session_state:
     # 과목 색상 딕셔너리: {"과목명": "#RRGGBB"}
@@ -11,15 +18,6 @@ if "subject_colors" not in st.session_state:
 
 if "assignments" not in st.session_state:
     # 수행평가 리스트
-    # 각 항목 예시:
-    # {
-    #   "id": 1,
-    #   "title": "...",
-    #   "subject": "...",
-    #   "due_date": "2025-12-03",
-    #   "memo": "...",
-    #   "images": [UploadedFile, ...],
-    # }
     st.session_state.assignments = []
 
 if "next_id" not in st.session_state:
@@ -75,7 +73,7 @@ with st.sidebar:
     else:
         st.info("아직 등록된 과목이 없습니다. 아래에서 추가하세요!")
 
-    # 과목 삭제 기능 (이제 해당 과목 수행평가들도 같이 삭제)
+    # 과목 삭제 기능 (과목 + 해당 과목 수행평가 모두 삭제)
     if st.session_state.subject_colors:
         st.markdown("---")
         st.subheader("과목 삭제")
@@ -92,20 +90,24 @@ with st.sidebar:
                     a for a in st.session_state.assignments
                     if a["subject"] != subj_to_delete
                 ]
-                # 만약 선택되어 있던 수행평가가 이 과목이면 선택 해제
+                # 선택되어 있던 수행평가가 이 과목이면 선택 해제
                 sel = get_assignment_by_id(st.session_state.selected_assignment_id)
                 if sel is not None and sel["subject"] == subj_to_delete:
                     st.session_state.selected_assignment_id = None
                     st.session_state.edit_mode = False
 
                 st.success(f"과목 '{subj_to_delete}'와(과) 관련된 수행평가를 모두 삭제했습니다.")
+                force_rerun()
 
     st.markdown("---")
     with st.form("add_subject_form"):
         st.subheader("과목 추가 / 수정")
-        subj = st.text_input("과목 이름", placeholder="예: 물리, 국어, 정보")
+        subj = st.text_input("과목 이름", key="subject_name", placeholder="예: 물리, 국어, 정보")
         color = st.text_input(
-            "색상 (HEX 코드)", value="#", placeholder="#FF0000 처럼 입력"
+            "색상 (HEX 코드)",
+            key="subject_color",
+            value=st.session_state.get("subject_color", "#"),
+            placeholder="#FF0000 처럼 입력",
         )
         submitted = st.form_submit_button("저장")
         if submitted:
@@ -116,6 +118,10 @@ with st.sidebar:
             else:
                 st.session_state.subject_colors[subj.strip()] = color.upper()
                 st.success(f"과목 '{subj.strip()}' 색상을 {color.upper()} 로 저장했습니다.")
+                # 입력 칸 비우기
+                st.session_state.subject_name = ""
+                st.session_state.subject_color = "#"
+                force_rerun()
 
 
 # ---------- 메인 타이틀 ----------
@@ -256,6 +262,7 @@ for week in month_weeks:
                     if st.button("열기", key=f"open_{a['id']}"):
                         st.session_state.selected_assignment_id = a["id"]
                         st.session_state.edit_mode = False
+                        force_rerun()
 
 st.markdown("---")
 
@@ -314,6 +321,7 @@ else:
             st.write("")
             if st.button("수정", key="edit_btn"):
                 st.session_state.edit_mode = True
+                force_rerun()
 
     else:
         st.markdown("#### ✏️ 수행평가 수정")
@@ -379,14 +387,15 @@ else:
 
                 st.session_state.edit_mode = False
                 st.success("수행평가 정보를 수정했습니다.")
+                force_rerun()
 
             elif cancel_clicked:
                 st.session_state.edit_mode = False
                 st.session_state.selected_assignment_id = None
                 st.info("수정을 취소했습니다. 선택도 해제되었습니다.")
+                force_rerun()
 
             elif delete_clicked:
-                # 이 수행평가를 assignments 리스트에서 제거
                 st.session_state.assignments = [
                     a for a in st.session_state.assignments
                     if a["id"] != selected["id"]
@@ -394,6 +403,7 @@ else:
                 st.session_state.edit_mode = False
                 st.session_state.selected_assignment_id = None
                 st.success("수행평가를 삭제했습니다.")
+                force_rerun()
 
 st.markdown("---")
 
