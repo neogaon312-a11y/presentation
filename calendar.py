@@ -159,8 +159,10 @@ weekday_names = ["월", "화", "수", "목", "금", "토", "일"]
 cols = st.columns(7)
 for i, name in enumerate(weekday_names):
     with cols[i]:
-        st.markdown(f"<div style='text-align:center;font-weight:bold;'>{name}</div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align:center;font-weight:bold;'>{name}</div>",
+            unsafe_allow_html=True,
+        )
 
 # 날짜 + 수행평가 표시
 for week in month_weeks:
@@ -202,48 +204,45 @@ for week in month_weeks:
 
 st.markdown("---")
 
-# ---------- 날짜별 상세 보기 ----------
-st.markdown("### 🔍 날짜별 상세 보기")
+# ---------- 해야 할 수행평가 리스트 (날짜 순) ----------
+st.markdown("### 🔔 해야 할 수행평가 (다가오는 과제)")
 
-detail_col1, detail_col2 = st.columns([1, 3])
+# 오늘 기준으로 아직 마감일이 남은 과제만
+upcoming = [
+    a for a in st.session_state.assignments
+    if a["due_date"] >= today.isoformat()
+]
 
-with detail_col1:
-    detail_date = st.date_input("상세 보기 날짜 선택", value=today, key="detail_date")
+# 마감일 기준으로 정렬
+upcoming.sort(key=lambda x: x["due_date"])
 
-with detail_col2:
-    selected_assignments = get_assignments_by_date(detail_date)
-    if not selected_assignments:
-        st.info("선택한 날짜에 등록된 수행평가가 없습니다.")
-    else:
-        for idx, a in enumerate(selected_assignments, start=1):
-            color = st.session_state.subject_colors.get(a["subject"], "#666666")
-            st.markdown(
-                f"""
-                <div style="
-                    border:1px solid #dddddd;
-                    border-left:6px solid {color};
-                    border-radius:6px;
-                    padding:8px 10px;
-                    margin-bottom:12px;
-                    ">
-                    <div style="font-size:0.9rem;margin-bottom:4px;">
-                        <span style="font-weight:bold;">[{idx}] {a['title']}</span><br/>
-                        <span style="color:{color};font-weight:bold;">과목: {a['subject']}</span><br/>
-                        <span>마감일: {a['due_date']}</span>
-                    </div>
-                    <div style="font-size:0.8rem;margin-bottom:6px;white-space:pre-wrap;">
-                        {a['memo'] if a['memo'] else "(메모 없음)"}
-                    </div>
+if not upcoming:
+    st.info("앞으로 해야 할 수행평가가 없습니다.")
+else:
+    for a in upcoming:
+        # due_date 문자열을 date 객체로 변환
+        due = datetime.fromisoformat(a["due_date"]).date()
+        color = st.session_state.subject_colors.get(a["subject"], "#666666")
+
+        # 과목 + 날짜만 있는 박스
+        st.markdown(
+            f"""
+            <div style="
+                border:1px solid #dddddd;
+                border-left:6px solid {color};
+                border-radius:6px;
+                padding:6px 8px;
+                margin-bottom:8px;
+                ">
+                <div style="font-weight:bold;color:{color};">
+                    {a['subject']}
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # 사진이 있으면 보여주기
-            if a["images"]:
-                st.caption("📷 첨부된 사진들")
-                st.image(a["images"], use_column_width=True)
-            else:
-                st.caption("📷 첨부된 사진이 없습니다.")
+                <div style="font-size:0.85rem;">
+                    마감일: {due.strftime('%Y-%m-%d')}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
