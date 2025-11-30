@@ -7,7 +7,7 @@ import json
 st.set_page_config(page_title="수행평가 캘린더", layout="wide")
 
 # -------------------------------------------------------
-# 📌 폴더 & 파일 경로 설정
+# 📁 폴더 & 파일 경로
 # -------------------------------------------------------
 DATA_DIR = "data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -19,8 +19,13 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 # -------------------------------------------------------
-# 📌 유틸 함수들 — JSON 저장 / 불러오기 / 이미지 저장
+# 🔧 공통 유틸 함수
 # -------------------------------------------------------
+def force_rerun():
+    # 최신 Streamlit에서는 이거 하나만 쓰면 됨
+    st.rerun()
+
+
 def load_json(path, default):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -42,10 +47,8 @@ def save_uploaded_images(assign_id, uploaded_files):
     for idx, file in enumerate(uploaded_files):
         safe_name = f"{assign_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{idx}_{file.name}"
         dest = os.path.join(UPLOAD_DIR, safe_name)
-
         with open(dest, "wb") as out:
             out.write(file.getbuffer())
-
         paths.append(dest)
 
     return paths
@@ -59,28 +62,21 @@ def delete_image_files(path_list):
             try:
                 os.remove(p)
             except:
+                # 삭제 실패해도 앱이 죽지 않게
                 pass
 
 
-def force_rerun():
-    try:
-        st.rerun()
-    except:
-        st.experimental_rerun()
-
-
 # -------------------------------------------------------
-# 📌 세션 초기화 — 최초 1회 실행
+# 🧠 세션 초기화 (최초 1회)
 # -------------------------------------------------------
 if "initialized" not in st.session_state:
-
-    # 과목 로드
+    # 과목 색상 로드
     st.session_state["subject_colors"] = load_json(SUBJECTS_FILE, {})
 
     # 수행평가 로드
     st.session_state["assignments"] = load_json(ASSIGNMENTS_FILE, [])
 
-    # next_id 설정
+    # next_id 결정
     if st.session_state["assignments"]:
         max_id = max(a["id"] for a in st.session_state["assignments"])
         st.session_state["next_id"] = max_id + 1
@@ -97,7 +93,7 @@ if "initialized" not in st.session_state:
 
 
 # -------------------------------------------------------
-# 📌 유틸 — 특정 날짜 과제 가져오기 / ID로 가져오기
+# 🔍 과제 조회용 유틸
 # -------------------------------------------------------
 def get_assignments_for(day: date):
     iso = day.isoformat()
@@ -119,13 +115,14 @@ def change_month(delta: int):
 
 
 # -------------------------------------------------------
-# 📌 사이드바 — 과목 관리
+# 🎨 사이드바 — 과목 관리
 # -------------------------------------------------------
 with st.sidebar:
     st.header("🎨 과목 관리")
 
+    # 등록된 과목 리스트
     if st.session_state["subject_colors"]:
-        st.caption("등록된 과목들")
+        st.caption("등록된 과목")
         for sub, col in st.session_state["subject_colors"].items():
             st.markdown(
                 f"""
@@ -137,39 +134,40 @@ with st.sidebar:
                 """,
                 unsafe_allow_html=True
             )
-
-    st.markdown("---")
+    else:
+        st.info("아직 과목이 없습니다. 아래에서 추가하세요!")
 
     # 과목 삭제
     if st.session_state["subject_colors"]:
+        st.markdown("---")
         st.subheader("과목 삭제")
-        delete_subj = st.selectbox("삭제할 과목 선택", ["(선택없음)"] + list(st.session_state["subject_colors"].keys()))
+        delete_subj = st.selectbox(
+            "삭제할 과목 선택",
+            ["(선택없음)"] + list(st.session_state["subject_colors"].keys())
+        )
 
-        if delete_subj != "(선택없음)":
-            if st.button("과목 삭제"):
-                # 과목 삭제
-                st.session_state["subject_colors"].pop(delete_subj, None)
+        if delete_subj != "(선택없음)" and st.button("과목 삭제"):
+            # 과목 색상 삭제
+            st.session_state["subject_colors"].pop(delete_subj, None)
 
-                # 해당 과목의 수행평가 삭제
-                new_list = []
-                for a in st.session_state["assignments"]:
-                    if a["subject"] == delete_subj:
-                        delete_image_files(a["images"])
-                    else:
-                        new_list.append(a)
+            # 해당 과목의 수행평가 + 이미지 삭제
+            new_list = []
+            for a in st.session_state["assignments"]:
+                if a["subject"] == delete_subj:
+                    delete_image_files(a.get("images", []))
+                else:
+                    new_list.append(a)
+            st.session_state["assignments"] = new_list
 
-                st.session_state["assignments"] = new_list
+            # 파일 저장
+            save_json(SUBJECTS_FILE, st.session_state["subject_colors"])
+            save_json(ASSIGNMENTS_FILE, st.session_state["assignments"])
 
-                # 저장
-                save_json(SUBJECTS_FILE, st.session_state["subject_colors"])
-                save_json(ASSIGNMENTS_FILE, st.session_state["assignments"])
-
-                st.success(f"'{delete_subj}' 과목 및 관련 과제 삭제 완료")
-                force_rerun()
-
-    st.markdown("---")
+            st.success(f"'{delete_subj}' 과목과 관련 과제를 모두 삭제했습니다.")
+            force_rerun()
 
     # 과목 추가
+    st.markdown("---")
     with st.form("add_subject"):
         st.subheader("과목 추가")
         subj = st.text_input("과목명")
@@ -180,30 +178,29 @@ with st.sidebar:
             if not subj.strip():
                 st.warning("과목명을 입력해주세요.")
             elif not (len(color) == 7 and color.startswith("#")):
-                st.warning("색상 형식이 잘못되었습니다 (#RRGGBB).")
+                st.warning("색상 형식이 잘못되었습니다. 예: #FF0000")
             else:
                 st.session_state["subject_colors"][subj.strip()] = color.upper()
                 save_json(SUBJECTS_FILE, st.session_state["subject_colors"])
-                st.success("과목 저장 완료")
+                st.success("과목이 저장되었습니다.")
                 force_rerun()
 
 
 # -------------------------------------------------------
-# 📌 메인 화면
+# 🖥 메인 — 제목 & 월 이동
 # -------------------------------------------------------
-st.title("📅 수행평가 달력")
+st.title("📅 수행평가 캘린더")
 
-# ------------------- 달 이동 --------------------
 col1, col2, col3 = st.columns([1, 2, 1])
-
 with col1:
     if st.button("◀"):
         change_month(-1)
-
 with col2:
     cm = st.session_state["current_month"]
-    st.markdown(f"<h2 style='text-align:center'>{cm.year}년 {cm.month}월</h2>", unsafe_allow_html=True)
-
+    st.markdown(
+        f"<h2 style='text-align:center'>{cm.year}년 {cm.month}월</h2>",
+        unsafe_allow_html=True
+    )
 with col3:
     if st.button("▶"):
         change_month(1)
@@ -212,7 +209,7 @@ st.markdown("---")
 
 
 # -------------------------------------------------------
-# 📌 수행평가 추가
+# ✏️ 수행평가 추가
 # -------------------------------------------------------
 st.subheader("✏️ 수행평가 추가")
 
@@ -224,10 +221,13 @@ with st.form("add_assignment"):
 
     with c2:
         subjects = list(st.session_state["subject_colors"].keys())
-        subject = st.selectbox("과목", subjects if subjects else ["(먼저 과목을 추가하세요)"])
+        subject = st.selectbox(
+            "과목",
+            subjects if subjects else ["(먼저 과목을 추가하세요)"]
+        )
         memo = st.text_area("메모", height=80)
 
-    images = st.file_uploader("사진 업로드", accept_multiple_files=True)
+    images = st.file_uploader("사진 업로드 (선택, 여러 장 가능)", accept_multiple_files=True)
 
     submit_assign = st.form_submit_button("등록")
 
@@ -235,7 +235,7 @@ with st.form("add_assignment"):
         if not title.strip():
             st.warning("제목을 입력해주세요.")
         elif not subjects:
-            st.warning("먼저 과목을 추가해야 합니다.")
+            st.warning("먼저 왼쪽에서 과목을 추가해야 합니다.")
         else:
             new_id = st.session_state["next_id"]
             st.session_state["next_id"] += 1
@@ -255,16 +255,17 @@ with st.form("add_assignment"):
             st.session_state["assignments"].append(assignment)
             save_json(ASSIGNMENTS_FILE, st.session_state["assignments"])
 
-            st.success("등록 완료!")
+            st.success("수행평가가 등록되었습니다!")
             force_rerun()
-
 
 st.markdown("---")
 
 
 # -------------------------------------------------------
-# 📌 달력 렌더링
+# 🗓 달력 렌더링
 # -------------------------------------------------------
+st.subheader("🗓 월별 캘린더")
+
 year = cm.year
 month = cm.month
 cal = calendar.Calendar(firstweekday=0)
@@ -273,14 +274,17 @@ weeks = cal.monthdatescalendar(year, month)
 weekday_names = ["월", "화", "수", "목", "금", "토", "일"]
 cols = st.columns(7)
 for i, name in enumerate(weekday_names):
-    cols[i].markdown(f"<div style='text-align:center;font-weight:bold'>{name}</div>", unsafe_allow_html=True)
+    cols[i].markdown(
+        f"<div style='text-align:center;font-weight:bold'>{name}</div>",
+        unsafe_allow_html=True
+    )
 
 for week in weeks:
     cols = st.columns(7)
     for i, day in enumerate(week):
         with cols[i]:
             if day.month != month:
-                st.markdown(f"<div style='color:#999'>{day.day}</div>")
+                st.markdown(f"<div style='color:#999'>{day.day}</div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"**{day.day}**")
 
@@ -308,20 +312,20 @@ for week in weeks:
                         st.session_state["edit_mode"] = False
                         force_rerun()
 
-
 st.markdown("---")
 
 
 # -------------------------------------------------------
-# 📌 선택된 수행평가 상세보기 / 수정
+# 📌 선택된 수행평가 보기 / 수정
 # -------------------------------------------------------
 st.subheader("📌 선택된 수행평가")
 
 selected = get_assignment_by_id(st.session_state["selected_assignment_id"])
 
 if not selected:
-    st.info("달력에서 열기를 눌러 과제를 선택하세요.")
+    st.info("달력에서 '열기' 버튼을 눌러 과제를 선택하세요.")
 else:
+    # ---------------- 보기 모드 ----------------
     if not st.session_state["edit_mode"]:
         color = st.session_state["subject_colors"].get(selected["subject"], "#666")
 
@@ -345,13 +349,14 @@ else:
             st.caption("📸 업로드된 사진")
             for img in selected["images"]:
                 st.image(img, width=400)
+        else:
+            st.caption("📸 업로드된 사진이 없습니다.")
 
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("수정"):
                 st.session_state["edit_mode"] = True
                 force_rerun()
-
         with col_b:
             if st.button("삭제"):
                 delete_image_files(selected["images"])
@@ -360,34 +365,43 @@ else:
                 ]
                 save_json(ASSIGNMENTS_FILE, st.session_state["assignments"])
                 st.session_state["selected_assignment_id"] = None
-                st.success("삭제 완료!")
+                st.success("수행평가가 삭제되었습니다.")
                 force_rerun()
 
+    # ---------------- 수정 모드 ----------------
     else:
         st.subheader("✏️ 수행평가 수정")
 
-        with st.form("edit_form"):
+        with st.form("edit_assignment"):
             c1, c2 = st.columns(2)
-
             with c1:
                 new_title = st.text_input("제목", value=selected["title"])
-                new_date = st.date_input("마감일", value=date.fromisoformat(selected["due_date"]))
-
+                new_date = st.date_input(
+                    "마감일",
+                    value=date.fromisoformat(selected["due_date"])
+                )
             with c2:
                 subjects = list(st.session_state["subject_colors"].keys())
-                new_subject = st.selectbox("과목", subjects, index=subjects.index(selected["subject"]))
+                new_subject = st.selectbox(
+                    "과목",
+                    subjects,
+                    index=subjects.index(selected["subject"]) if selected["subject"] in subjects else 0
+                )
                 new_memo = st.text_area("메모", value=selected["memo"], height=80)
 
-            new_images = st.file_uploader("사진 다시 업로드(선택)", accept_multiple_files=True)
+            new_images = st.file_uploader(
+                "사진 다시 업로드 (선택, 새로 올리면 기존 사진을 대체)",
+                accept_multiple_files=True
+            )
 
             save_btn = st.form_submit_button("저장")
             cancel_btn = st.form_submit_button("취소")
 
             if save_btn:
-                selected["title"] = new_title
+                selected["title"] = new_title.strip()
                 selected["subject"] = new_subject
                 selected["due_date"] = new_date.isoformat()
-                selected["memo"] = new_memo
+                selected["memo"] = new_memo.strip()
 
                 if new_images:
                     delete_image_files(selected["images"])
@@ -395,7 +409,7 @@ else:
 
                 save_json(ASSIGNMENTS_FILE, st.session_state["assignments"])
                 st.session_state["edit_mode"] = False
-                st.success("수정 완료!")
+                st.success("수정되었습니다.")
                 force_rerun()
 
             if cancel_btn:
@@ -403,12 +417,11 @@ else:
                 st.session_state["selected_assignment_id"] = None
                 force_rerun()
 
-
 st.markdown("---")
 
 
 # -------------------------------------------------------
-# 📌 해야 할 수행평가 목록
+# ⏳ 해야 할 수행평가 리스트
 # -------------------------------------------------------
 st.subheader("⏳ 해야 할 수행평가")
 
@@ -431,8 +444,8 @@ else:
                 padding:8px;
                 border-radius:6px;
                 margin-bottom:6px;">
-                <b>{a['subject']}</b> — {a['title']}  
-                <div>마감일: {a['due_date']}</div>
+                <b>{a['subject']}</b> — {a['title']}<br/>
+                마감일: {a['due_date']}
             </div>
             """,
             unsafe_allow_html=True
