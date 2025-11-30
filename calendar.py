@@ -13,43 +13,46 @@ def force_rerun():
 
 # ---------- 세션 상태 초기화 ----------
 if "subject_colors" not in st.session_state:
-    # 과목 색상 딕셔너리: {"과목명": "#RRGGBB"}
-    st.session_state.subject_colors = {}
+    st.session_state["subject_colors"] = {}
 
 if "assignments" not in st.session_state:
-    # 수행평가 리스트
-    st.session_state.assignments = []
+    st.session_state["assignments"] = []
 
 if "next_id" not in st.session_state:
-    st.session_state.next_id = 1
+    st.session_state["next_id"] = 1
 
 if "selected_assignment_id" not in st.session_state:
-    st.session_state.selected_assignment_id = None
+    st.session_state["selected_assignment_id"] = None
 
 if "edit_mode" not in st.session_state:
-    st.session_state.edit_mode = False
+    st.session_state["edit_mode"] = False
+
+# 과목 입력칸 기본값
+if "subject_name" not in st.session_state:
+    st.session_state["subject_name"] = ""
+if "subject_color" not in st.session_state:
+    st.session_state["subject_color"] = "#"
 
 today = date.today()
 if "current_month" not in st.session_state:
-    st.session_state.current_month = date(today.year, today.month, 1)
+    st.session_state["current_month"] = date(today.year, today.month, 1)
 
 
 # ---------- 유틸 함수 ----------
 def change_month(delta: int):
-    """현재 선택된 달을 delta(±1)만큼 이동"""
-    d = st.session_state.current_month
+    d = st.session_state["current_month"]
     year = d.year + (d.month + delta - 1) // 12
     month = (d.month + delta - 1) % 12 + 1
-    st.session_state.current_month = date(year, month, 1)
+    st.session_state["current_month"] = date(year, month, 1)
 
 
 def get_assignments_by_date(target_date: date):
     iso = target_date.isoformat()
-    return [a for a in st.session_state.assignments if a["due_date"] == iso]
+    return [a for a in st.session_state["assignments"] if a["due_date"] == iso]
 
 
 def get_assignment_by_id(aid: int):
-    for a in st.session_state.assignments:
+    for a in st.session_state["assignments"]:
         if a["id"] == aid:
             return a
     return None
@@ -59,10 +62,9 @@ def get_assignment_by_id(aid: int):
 with st.sidebar:
     st.header("🎨 과목 색상 설정")
 
-    # 현재 과목 목록 보여주기
-    if st.session_state.subject_colors:
+    if st.session_state["subject_colors"]:
         st.caption("현재 등록된 과목들")
-        for subj, color in st.session_state.subject_colors.items():
+        for subj, color in st.session_state["subject_colors"].items():
             st.markdown(
                 f"<div style='display:flex;align-items:center;margin-bottom:4px;'>"
                 f"<div style='width:14px;height:14px;background:{color};"
@@ -73,28 +75,25 @@ with st.sidebar:
     else:
         st.info("아직 등록된 과목이 없습니다. 아래에서 추가하세요!")
 
-    # 과목 삭제 기능 (과목 + 해당 과목 수행평가 모두 삭제)
-    if st.session_state.subject_colors:
+    # 과목 삭제 (해당 과목 수행평가도 같이 삭제)
+    if st.session_state["subject_colors"]:
         st.markdown("---")
         st.subheader("과목 삭제")
-        subjects_list = list(st.session_state.subject_colors.keys())
+        subjects_list = list(st.session_state["subject_colors"].keys())
         subj_to_delete = st.selectbox(
             "삭제할 과목 선택", options=["(선택 안 함)"] + subjects_list
         )
         if subj_to_delete != "(선택 안 함)":
             if st.button("선택한 과목 삭제"):
-                # 색상 딕셔너리에서 과목 삭제
-                st.session_state.subject_colors.pop(subj_to_delete, None)
-                # 해당 과목의 수행평가들도 모두 삭제
-                st.session_state.assignments = [
-                    a for a in st.session_state.assignments
+                st.session_state["subject_colors"].pop(subj_to_delete, None)
+                st.session_state["assignments"] = [
+                    a for a in st.session_state["assignments"]
                     if a["subject"] != subj_to_delete
                 ]
-                # 선택되어 있던 수행평가가 이 과목이면 선택 해제
-                sel = get_assignment_by_id(st.session_state.selected_assignment_id)
+                sel = get_assignment_by_id(st.session_state["selected_assignment_id"])
                 if sel is not None and sel["subject"] == subj_to_delete:
-                    st.session_state.selected_assignment_id = None
-                    st.session_state.edit_mode = False
+                    st.session_state["selected_assignment_id"] = None
+                    st.session_state["edit_mode"] = False
 
                 st.success(f"과목 '{subj_to_delete}'와(과) 관련된 수행평가를 모두 삭제했습니다.")
                 force_rerun()
@@ -102,11 +101,14 @@ with st.sidebar:
     st.markdown("---")
     with st.form("add_subject_form"):
         st.subheader("과목 추가 / 수정")
-        subj = st.text_input("과목 이름", key="subject_name", placeholder="예: 물리, 국어, 정보")
+        subj = st.text_input(
+            "과목 이름",
+            key="subject_name",
+            placeholder="예: 물리, 국어, 정보",
+        )
         color = st.text_input(
             "색상 (HEX 코드)",
             key="subject_color",
-            value=st.session_state.get("subject_color", "#"),
             placeholder="#FF0000 처럼 입력",
         )
         submitted = st.form_submit_button("저장")
@@ -116,11 +118,11 @@ with st.sidebar:
             elif not (len(color) == 7 and color.startswith("#")):
                 st.warning("색상은 #RRGGBB 형태로 입력해 주세요.")
             else:
-                st.session_state.subject_colors[subj.strip()] = color.upper()
+                st.session_state["subject_colors"][subj.strip()] = color.upper()
                 st.success(f"과목 '{subj.strip()}' 색상을 {color.upper()} 로 저장했습니다.")
-                # 입력 칸 비우기
-                st.session_state.subject_name = ""
-                st.session_state.subject_color = "#"
+                # 입력칸 비우기 (dict 방식으로!)
+                st.session_state["subject_name"] = ""
+                st.session_state["subject_color"] = "#"
                 force_rerun()
 
 
@@ -135,7 +137,7 @@ with col_prev:
         change_month(-1)
 
 with col_month:
-    cm = st.session_state.current_month
+    cm = st.session_state["current_month"]
     st.markdown(
         f"<h3 style='text-align:center;'>{cm.year}년 {cm.month}월</h3>",
         unsafe_allow_html=True,
@@ -157,7 +159,7 @@ with st.form("add_assignment_form"):
         title = st.text_input("제목", placeholder="예: 물리 포물선 실험 보고서")
 
     with right:
-        subjects = list(st.session_state.subject_colors.keys())
+        subjects = list(st.session_state["subject_colors"].keys())
         subject = st.selectbox(
             "과목",
             options=subjects if subjects else ["(먼저 과목을 추가해 주세요)"],
@@ -178,10 +180,10 @@ with st.form("add_assignment_form"):
         elif not subjects:
             st.warning("먼저 왼쪽 사이드바에서 과목을 추가해 주세요.")
         else:
-            new_id = st.session_state.next_id
-            st.session_state.next_id += 1
+            new_id = st.session_state["next_id"]
+            st.session_state["next_id"] += 1
 
-            st.session_state.assignments.append(
+            st.session_state["assignments"].append(
                 {
                     "id": new_id,
                     "title": title.strip(),
@@ -197,16 +199,15 @@ with st.form("add_assignment_form"):
 
 st.markdown("---")
 
-# ---------- 월별 캘린더 렌더링 ----------
+# ---------- 월별 캘린더 ----------
 st.markdown("### 🗓 월별 캘린더 (박스 '열기' → 상세 보기)")
 
-year = st.session_state.current_month.year
-month = st.session_state.current_month.month
+year = st.session_state["current_month"].year
+month = st.session_state["current_month"].month
 
-cal = calendar.Calendar(firstweekday=0)  # 0 = Monday, 6 = Sunday
+cal = calendar.Calendar(firstweekday=0)
 month_weeks = cal.monthdatescalendar(year, month)
 
-# 요일 헤더
 weekday_names = ["월", "화", "수", "목", "금", "토", "일"]
 cols = st.columns(7)
 for i, name in enumerate(weekday_names):
@@ -216,12 +217,10 @@ for i, name in enumerate(weekday_names):
             unsafe_allow_html=True,
         )
 
-# 날짜 + 수행평가 표시 (각 수행평가별로 '열기' 버튼)
 for week in month_weeks:
     cols = st.columns(7)
     for i, day in enumerate(week):
         with cols[i]:
-            # 이번 달이 아닌 날짜는 흐리게
             if day.month != month:
                 st.markdown(
                     f"<div style='color:#bbbbbb;text-align:left;font-size:0.8rem;'>{day.day}</div>",
@@ -238,9 +237,7 @@ for week in month_weeks:
                     continue
 
                 for a in day_assignments:
-                    color = st.session_state.subject_colors.get(a["subject"], "#666666")
-
-                    # 박스 크기 줄이기
+                    color = st.session_state["subject_colors"].get(a["subject"], "#666666")
                     st.markdown(
                         f"""
                         <div style="
@@ -258,31 +255,29 @@ for week in month_weeks:
                         unsafe_allow_html=True,
                     )
 
-                    # '열기' 버튼 (정보 보기용)
                     if st.button("열기", key=f"open_{a['id']}"):
-                        st.session_state.selected_assignment_id = a["id"]
-                        st.session_state.edit_mode = False
+                        st.session_state["selected_assignment_id"] = a["id"]
+                        st.session_state["edit_mode"] = False
                         force_rerun()
 
 st.markdown("---")
 
-# ---------- 선택된 수행평가 상세 + 수정/삭제 ----------
+# ---------- 선택된 수행평가 ----------
 st.markdown("### 📌 선택된 수행평가")
 
 selected = (
-    get_assignment_by_id(st.session_state.selected_assignment_id)
-    if st.session_state.selected_assignment_id is not None
+    get_assignment_by_id(st.session_state["selected_assignment_id"])
+    if st.session_state["selected_assignment_id"] is not None
     else None
 )
 
 if selected is None:
     st.info("캘린더에서 보고 싶은 수행평가의 '열기' 버튼을 눌러 선택해 주세요.")
 else:
-    # 보기 모드 / 수정 모드
-    if not st.session_state.edit_mode:
+    if not st.session_state["edit_mode"]:
         top_left, top_right = st.columns([3, 1])
         with top_left:
-            color = st.session_state.subject_colors.get(selected["subject"], "#666666")
+            color = st.session_state["subject_colors"].get(selected["subject"], "#666666")
             st.markdown(
                 f"""
                 <div style="
@@ -309,7 +304,6 @@ else:
                 unsafe_allow_html=True,
             )
 
-            # 업로드된 사진 표시
             if selected["images"]:
                 st.caption("📷 업로드된 사진")
                 st.image(selected["images"], use_column_width=True)
@@ -320,9 +314,8 @@ else:
             st.write("")
             st.write("")
             if st.button("수정", key="edit_btn"):
-                st.session_state.edit_mode = True
+                st.session_state["edit_mode"] = True
                 force_rerun()
-
     else:
         st.markdown("#### ✏️ 수행평가 수정")
 
@@ -342,7 +335,7 @@ else:
                 )
 
             with right:
-                subjects = list(st.session_state.subject_colors.keys())
+                subjects = list(st.session_state["subject_colors"].keys())
                 if selected["subject"] in subjects:
                     default_index = subjects.index(selected["subject"])
                 else:
@@ -385,34 +378,34 @@ else:
                 if new_images:
                     selected["images"] = new_images
 
-                st.session_state.edit_mode = False
+                st.session_state["edit_mode"] = False
                 st.success("수행평가 정보를 수정했습니다.")
                 force_rerun()
 
             elif cancel_clicked:
-                st.session_state.edit_mode = False
-                st.session_state.selected_assignment_id = None
+                st.session_state["edit_mode"] = False
+                st.session_state["selected_assignment_id"] = None
                 st.info("수정을 취소했습니다. 선택도 해제되었습니다.")
                 force_rerun()
 
             elif delete_clicked:
-                st.session_state.assignments = [
-                    a for a in st.session_state.assignments
+                st.session_state["assignments"] = [
+                    a for a in st.session_state["assignments"]
                     if a["id"] != selected["id"]
                 ]
-                st.session_state.edit_mode = False
-                st.session_state.selected_assignment_id = None
+                st.session_state["edit_mode"] = False
+                st.session_state["selected_assignment_id"] = None
                 st.success("수행평가를 삭제했습니다.")
                 force_rerun()
 
 st.markdown("---")
 
-# ---------- 해야 할 수행평가 리스트 (날짜 순) ----------
+# ---------- 해야 할 수행평가 리스트 ----------
 st.markdown("### 🔔 해야 할 수행평가 (다가오는 과제)")
 
 upcoming = [
     a
-    for a in st.session_state.assignments
+    for a in st.session_state["assignments"]
     if a["due_date"] >= today.isoformat()
 ]
 
@@ -423,7 +416,7 @@ if not upcoming:
 else:
     for a in upcoming:
         due = date.fromisoformat(a["due_date"])
-        color = st.session_state.subject_colors.get(a["subject"], "#666666")
+        color = st.session_state["subject_colors"].get(a["subject"], "#666666")
 
         st.markdown(
             f"""
