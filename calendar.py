@@ -27,12 +27,6 @@ if "selected_assignment_id" not in st.session_state:
 if "edit_mode" not in st.session_state:
     st.session_state["edit_mode"] = False
 
-# 과목 입력칸 기본값
-if "subject_name" not in st.session_state:
-    st.session_state["subject_name"] = ""
-if "subject_color" not in st.session_state:
-    st.session_state["subject_color"] = "#"
-
 today = date.today()
 if "current_month" not in st.session_state:
     st.session_state["current_month"] = date(today.year, today.month, 1)
@@ -62,6 +56,7 @@ def get_assignment_by_id(aid: int):
 with st.sidebar:
     st.header("🎨 과목 색상 설정")
 
+    # 현재 과목 목록
     if st.session_state["subject_colors"]:
         st.caption("현재 등록된 과목들")
         for subj, color in st.session_state["subject_colors"].items():
@@ -75,7 +70,7 @@ with st.sidebar:
     else:
         st.info("아직 등록된 과목이 없습니다. 아래에서 추가하세요!")
 
-    # 과목 삭제 (해당 과목 수행평가도 같이 삭제)
+    # 과목 삭제 (과목 + 해당 과목 수행평가 모두 삭제)
     if st.session_state["subject_colors"]:
         st.markdown("---")
         st.subheader("과목 삭제")
@@ -101,14 +96,10 @@ with st.sidebar:
     st.markdown("---")
     with st.form("add_subject_form"):
         st.subheader("과목 추가 / 수정")
-        subj = st.text_input(
-            "과목 이름",
-            key="subject_name",
-            placeholder="예: 물리, 국어, 정보",
-        )
+        subj = st.text_input("과목 이름", placeholder="예: 물리, 국어, 정보")
         color = st.text_input(
             "색상 (HEX 코드)",
-            key="subject_color",
+            value="#",
             placeholder="#FF0000 처럼 입력",
         )
         submitted = st.form_submit_button("저장")
@@ -120,9 +111,7 @@ with st.sidebar:
             else:
                 st.session_state["subject_colors"][subj.strip()] = color.upper()
                 st.success(f"과목 '{subj.strip()}' 색상을 {color.upper()} 로 저장했습니다.")
-                # 입력칸 비우기 (dict 방식으로!)
-                st.session_state["subject_name"] = ""
-                st.session_state["subject_color"] = "#"
+                # 여기서는 굳이 입력칸 비우지 않고, 바로 다시 적을 수 있게 둠
                 force_rerun()
 
 
