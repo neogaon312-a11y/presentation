@@ -75,6 +75,21 @@ with st.sidebar:
     else:
         st.info("아직 등록된 과목이 없습니다. 아래에서 추가하세요!")
 
+    # 과목 삭제 기능
+    if st.session_state.subject_colors:
+        st.markdown("---")
+        st.subheader("과목 삭제")
+        subjects_list = list(st.session_state.subject_colors.keys())
+        subj_to_delete = st.selectbox(
+            "삭제할 과목 선택", options=["(선택 안 함)"] + subjects_list
+        )
+        if subj_to_delete != "(선택 안 함)":
+            if st.button("선택한 과목 삭제"):
+                # 색상 딕셔너리에서 삭제
+                st.session_state.subject_colors.pop(subj_to_delete, None)
+                # 이미 등록된 수행평가들은 과목 이름은 유지 (지우면 보기 불편해지니 그대로 둠)
+                st.success(f"과목 '{subj_to_delete}'를 색상 목록에서 삭제했습니다.")
+
     st.markdown("---")
     with st.form("add_subject_form"):
         st.subheader("과목 추가 / 수정")
@@ -167,7 +182,7 @@ with st.form("add_assignment_form"):
 st.markdown("---")
 
 # ---------- 월별 캘린더 렌더링 ----------
-st.markdown("### 🗓 월별 캘린더 (박스 클릭 → 상세 보기)")
+st.markdown("### 🗓 월별 캘린더 (박스 '열기' → 상세 보기)")
 
 year = st.session_state.current_month.year
 month = st.session_state.current_month.month
@@ -193,11 +208,12 @@ for week in month_weeks:
             # 이번 달이 아닌 날짜는 흐리게
             if day.month != month:
                 st.markdown(
-                    f"<div style='color:#bbbbbb;text-align:left;'>{day.day}</div>",
+                    f"<div style='color:#bbbbbb;text-align:left;font-size:0.8rem;'>{day.day}</div>",
                     unsafe_allow_html=True,
                 )
             else:
-                st.markdown(f"**{day.day}**")
+                st.markdown(f"<div style='font-weight:bold;font-size:0.85rem;'>{day.day}</div>",
+                            unsafe_allow_html=True)
 
                 day_assignments = get_assignments_by_date(day)
                 if not day_assignments:
@@ -206,16 +222,16 @@ for week in month_weeks:
                 for a in day_assignments:
                     color = st.session_state.subject_colors.get(a["subject"], "#666666")
 
-                    # 색깔 박스 (정보 표시)
+                    # 박스 크기 줄이기 (padding, margin, font-size 줄임)
                     st.markdown(
                         f"""
                         <div style="
                             background-color:{color}22;
-                            border-left:4px solid {color};
-                            padding:2px 4px;
-                            margin:2px 0;
-                            font-size:0.7rem;
-                            border-radius:4px;
+                            border-left:3px solid {color};
+                            padding:1px 3px;
+                            margin:1px 0;
+                            font-size:0.65rem;
+                            border-radius:3px;
                             ">
                             <strong>{a['subject']}</strong><br/>
                             {a['title']}
@@ -224,7 +240,7 @@ for week in month_weeks:
                         unsafe_allow_html=True,
                     )
 
-                    # '열기' 버튼 (클릭 시 선택된 수행평가 변경)
+                    # '열기' 버튼 (정보 보기용)
                     if st.button("열기", key=f"open_{a['id']}"):
                         st.session_state.selected_assignment_id = a["id"]
                         st.session_state.edit_mode = False
@@ -308,7 +324,6 @@ else:
 
             with right:
                 subjects = list(st.session_state.subject_colors.keys())
-                # 과목 선택 박스에서 현재 과목을 기본값으로
                 if selected["subject"] in subjects:
                     default_index = subjects.index(selected["subject"])
                 else:
@@ -342,12 +357,10 @@ else:
                 cancel_clicked = st.form_submit_button("취소")
 
             if save_clicked:
-                # 값 업데이트
                 selected["title"] = new_title.strip()
                 selected["subject"] = new_subject if subjects else selected["subject"]
                 selected["due_date"] = new_due_date.isoformat()
                 selected["memo"] = new_memo.strip()
-                # 새 이미지를 업로드했으면 교체, 아니면 기존 유지
                 if new_images:
                     selected["images"] = new_images
 
@@ -355,22 +368,22 @@ else:
                 st.success("수행평가 정보를 수정했습니다.")
 
             elif cancel_clicked:
+                # 선택 해제 + 수정 모드 해제 → 아래 박스 바로 사라짐
                 st.session_state.edit_mode = False
-                st.info("수정을 취소했습니다.")
+                st.session_state.selected_assignment_id = None
+                st.info("수정을 취소했습니다. 선택도 해제되었습니다.")
 
 st.markdown("---")
 
 # ---------- 해야 할 수행평가 리스트 (날짜 순) ----------
 st.markdown("### 🔔 해야 할 수행평가 (다가오는 과제)")
 
-# 오늘 기준으로 아직 마감일이 남은 과제만
 upcoming = [
     a
     for a in st.session_state.assignments
     if a["due_date"] >= today.isoformat()
 ]
 
-# 마감일 기준으로 정렬
 upcoming.sort(key=lambda x: x["due_date"])
 
 if not upcoming:
